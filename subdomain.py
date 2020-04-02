@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import whois
 import dns.resolver
 from threading import Thread
 import argparse
@@ -29,6 +28,7 @@ class Subdomain:
 	def __init__(self):
 		self.q = Queue()
 		self.cursor = ''
+		self.mariadb_connection = ''
 
 	# print messages
 	def print_err(self, message):
@@ -66,6 +66,7 @@ class Subdomain:
 
 				try:
 					self.cursor.execute("INSERT INTO servers (domain, address, reverse_dns) VALUES (%s, %s, %s)", val)
+					self.mariadb_connection.commit()
 				except:
 					pass
 
@@ -97,8 +98,7 @@ class Subdomain:
 			worker.daemon = True
 			worker.start()
 
-
-	def main(self):
+	def main(self, domain='', path='', databases=''):
 		parser = argparse.ArgumentParser(description="Brute force subdomains of a specified domain.")
 		parser.add_argument('-d', nargs='?', metavar='domain',
 							help='Specifies the target parent domain you want to enumerate the subdomains of.')
@@ -113,13 +113,14 @@ class Subdomain:
 
 		args = parser.parse_args()
 
-		domain = ""
+		args.d = domain
 		if not args.d:
 			domain = input("Enter domain name: ")
 			#self.print_err("A parent domain must be specified with the -d option.")
 		elif args.d:
 			domain = args.d
 
+		args.w = path
 		if not args.w:
 			args.w = input("Enter path to wordlist directory: ")
 			#self.print_err("A wordlist must be specified with the -w option.")
@@ -136,15 +137,16 @@ class Subdomain:
 			args.t = 30
 
 		#create database
-		mariadb_connection = mariadb.connect(user='root', password='toor')
-		self.cursor = mariadb_connection.cursor()
-		databases = input("database name: ")
-		sql = 'CREATE OR REPLACE DATABASE ' + databases
-		self.cursor.execute(sql)
+		# mariadb_connection = mariadb.connect(user='root', password='toor')
+		# self.cursor = mariadb_connection.cursor()
+		if not databases:
+			databases = input("database name: ")
+		# sql = 'CREATE OR REPLACE DATABASE ' + databases
+		# self.cursor.execute(sql)
 
 		#create table
-		mariadb_connection = mariadb.connect(user='root', password='toor', database=databases)
-		self.cursor = mariadb_connection.cursor()
+		self.mariadb_connection = mariadb.connect(user='root', password='toor', database=databases)
+		self.cursor = self.mariadb_connection.cursor()
 		sql = "CREATE OR REPLACE TABLE servers (domain VARCHAR(1000) NOT NULL, address VARCHAR(1000) NOT NULL, reverse_dns VARCHAR(1000))"
 		self.cursor.execute(sql)
 
@@ -155,8 +157,9 @@ class Subdomain:
 			sys.exit(2)
 
 		self.q.join()
-		mariadb_connection.commit()
+		#mariadb_connection.commit()
 		print(self.cursor.rowcount, "record inserted.")
+
 
 if __name__ == "__main__":
 	test = Subdomain()
